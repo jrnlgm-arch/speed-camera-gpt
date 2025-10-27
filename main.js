@@ -1,3 +1,52 @@
+// Add at top:
+import { Tracker } from './tracker.js';
+import { SpeedEstimator } from './speed.js';
+
+// Add near state declaration:
+state.tracker = new Tracker({ iouThresh: 0.3, maxAge: 5, minHits: 3 });
+state.speedEst = new SpeedEstimator();
+state.activeId = null;
+state.lastDetections = [];
+
+// In initDetectorWorker(), extend onmessage handler (keep existing lines) with:
+state.detectorWorker.onmessage = (ev)=>{
+  const msg = ev.data;
+  if (msg?.type === 'ready') { /* existing */ }
+  else if (msg?.type === 'result') {
+    state.inferAvgMs = msg.inferMs ?? state.inferAvgMs;
+    state.lastDetections = msg.detections || [];
+  } else if (msg?.type === 'error') { /* existing */ }
+};
+
+// In loop(ts), after ctx.drawImage(…), insert:
+const active = state.tracker.update(state.lastDetections, ts, state.ctx);
+// pick active target
+let target = active[0];
+if (!state.activeId && target) state.activeId = target.id;
+if (state.activeId) {
+  const found = active.find(t => t.id === state.activeId);
+  if (found) target = found; else { state.activeId = target?.id || null; }
+}
+// speed compute
+let speedOut = null;
+if (target) {
+  const cal = getCalibrationState();
+  speedOut = state.speedEst.update(target, cal, ts);
+  // draw overlay
+  state.ctx.strokeStyle = '#4bd3ff'; state.ctx.lineWidth = 2;
+  state.ctx.strokeRect(target.bbox.x, target.bbox.y, target.bbox.w, target.bbox.h);
+  state.ctx.fillStyle = '#0e1327aa';
+  state.ctx.fillRect(target.bbox.x, target.bbox.y-18, 140, 18);
+  state.ctx.fillStyle = '#e7e9ee';
+  const mph = (speedOut.speedMph||0).toFixed(1);
+  const u = (speedOut.uncertaintyMph||0).toFixed(1);
+  state.ctx.fillText(`${mph} mph ±${u}`, target.bbox.x+6, target.bbox.y-5);
+}
+// draw all detections (thin boxes)
+for (const d of state.lastDetections){
+  state.ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  state.ctx.strokeRect(d.x, d.y, d.w, d.h);
+}
 import { ui, banner, chip, debugLog, setRuntimeStatus, presetAppliedFlash } from './ui.js';
 import { startLineCalibration, startHomographyCalibration, getCalibrationState, setPresetLength, resetCalibration, attachCalCleanup } from './calibration.js';
 import { WorkerMsg } from './ui.js';
