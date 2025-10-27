@@ -46,3 +46,12 @@ export function presetAppliedFlash(){
   input.style.outline = '2px solid #4bd3ff';
   setTimeout(()=>{ input.style.outline = 'none'; }, 700);
 }
+// --- Worker message schema (used by main.js & detector.js) ---
+export const WorkerMsg = {
+  init:   (backend, model, resolution) => ({ type: 'init', backend, model, resolution }),
+  frame:  (imageBitmap, ts)            => ({ type: 'frame', data: imageBitmap, ts }),
+  result: (detections, inferMs)        => ({ type: 'result', detections, inferMs }),
+  dispose:()                           => ({ type: 'dispose' }),
+  error:  (message)                    => ({ type: 'error', message })
+};
+
